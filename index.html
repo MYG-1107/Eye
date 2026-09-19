@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Eye Exercise App</title>
   <link rel="stylesheet" href="style.css" />
-  <!-- Load MediaPipe Tasks Vision Global Bundle -->
+  <!-- MediaPipe Tasks Vision Bundle -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm/vision_bundle.js" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -14,16 +14,15 @@
     <h1>Eye Exercise Assistant</h1>
     <p>Follow the green target with your eyes to complete the exercises.</p>
     <button id="start-btn">Start Exercise</button>
+    <div id="loading-status" style="margin-top: 15px; font-size: 0.9rem; color: #94a3b8;">Loading AI model...</div>
   </div>
 
   <!-- Main Exercise View -->
   <div id="app-container" class="hidden">
-    <!-- Camera Feed (hidden for privacy / UI cleanliness) -->
     <video id="webcam" autoplay playsinline muted class="hidden-video"></video>
     
-    <!-- Target Dot & Instructions -->
     <div id="exercise-target" class="target"></div>
-    <div id="instruction-text">Loading model...</div>
+    <div id="instruction-text">Position your eyes toward the target</div>
 
     <!-- Live Tester Debug Panel -->
     <div id="debug-panel">
