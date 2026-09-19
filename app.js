@@ -8,23 +8,29 @@ const startScreen = document.getElementById("start-screen");
 const appContainer = document.getElementById("app-container");
 const video = document.getElementById("webcam");
 const target = document.getElementById("exercise-target");
-const statusBadge = document.getElementById("status-badge");
 const instructionText = document.getElementById("instruction-text");
+const statusBadge = document.getElementById("status-badge");
 
 let faceLandmarker;
 let lastVideoTime = -1;
+let holdCounter = 0;
+const HOLD_FRAMES_REQUIRED = 45; // ~1.5 seconds of holding gaze to complete step
 
-// Ball position tracking variables (Smooth motion using lerp)
-let currentX = 50; // Screen percentage X (0 - 100%)
-let currentY = 50; // Screen percentage Y (0 - 100%)
-let targetX = 50;
-let targetY = 50;
+// Exercise Sequence Workflow
+const exerciseSteps = [
+  { label: "Look UP as far as you can ⬆️", targetX: 50, targetY: 10, requiredDirection: "UP" },
+  { label: "Return your eyes to CENTER 🎯", targetX: 50, targetY: 50, requiredDirection: "CENTER" },
+  { label: "Look DOWN as far as you can ⬇️", targetX: 50, targetY: 90, requiredDirection: "DOWN" },
+  { label: "Return your eyes to CENTER 🎯", targetX: 50, targetY: 50, requiredDirection: "CENTER" },
+  { label: "Look LEFT as far as you can ⬅️", targetX: 10, targetY: 50, requiredDirection: "LEFT" },
+  { label: "Return your eyes to CENTER 🎯", targetX: 50, targetY: 50, requiredDirection: "CENTER" },
+  { label: "Look RIGHT as far as you can ➡️", targetX: 90, targetY: 50, requiredDirection: "RIGHT" },
+  { label: "Exercise Complete! Great job! 🎉", targetX: 50, targetY: 50, requiredDirection: "DONE" }
+];
 
-// Sensitivity multiplier for eye movement (adjust if needed)
-const SENSITIVITY_X = 2.5; 
-const SENSITIVITY_Y = 2.0;
+let currentStepIndex = 0;
 
-// Initialize MediaPipe Face Landmarker
+// Initialize MediaPipe Face Landmarker with Blendshapes enabled
 async function initializeFaceLandmarker() {
   const filesetResolver = await FilesetResolver.forVisionTasks(
     "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
@@ -34,7 +40,7 @@ async function initializeFaceLandmarker() {
       modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`,
       delegate: "GPU"
     },
-    outputFaceBlendshapes: false,
+    outputFaceBlendshapes: true, // Enables high-accuracy gaze blendshape scores
     runningMode: "VIDEO",
     numFaces: 1
   });
@@ -43,18 +49,19 @@ async function initializeFaceLandmarker() {
 
 initializeFaceLandmarker();
 
-// Handle browser tab switching
+// Handle tab switching / losing focus
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) markPersonAbsent();
 });
 
 function markPersonAbsent() {
+  holdCounter = 0;
   statusBadge.innerText = "No Person Detected ❌";
   statusBadge.style.background = "rgba(239, 68, 68, 0.2)";
 }
 
-function markPersonPresent() {
-  statusBadge.innerText = "Person Detected ✅";
+function markPersonPresent(detectedDirection) {
+  statusBadge.innerText = `Person Detected ✅ | Gaze: ${detectedDirection}`;
   statusBadge.style.background = "rgba(16, 185, 129, 0.2)";
 }
 
@@ -76,8 +83,8 @@ startBtn.addEventListener("click", async () => {
 
     startScreen.classList.add("hidden");
     appContainer.classList.remove("hidden");
-    instructionText.innerText = "Move your eyes to move the green ball";
 
+    updateStepUI();
     video.addEventListener("loadeddata", predictWebcam);
   } catch (err) {
     alert("Camera permission and fullscreen access are required.");
@@ -85,12 +92,32 @@ startBtn.addEventListener("click", async () => {
   }
 });
 
-// Linear Interpolation helper for smooth ball motion
-function lerp(start, end, factor) {
-  return start + (end - start) * factor;
+// Detect Gaze Direction using MediaPipe Blendshapes
+function detectGazeDirection(blendshapes) {
+  if (!blendshapes || blendshapes.length === 0) return "CENTER";
+
+  const scores = {};
+  blendshapes[0].categories.forEach(b => {
+    scores[b.categoryName] = b.score;
+  });
+
+  const lookUp = ((scores["eyeLookUpLeft"] || 0) + (scores["eyeLookUpRight"] || 0)) / 2;
+  const lookDown = ((scores["eyeLookDownLeft"] || 0) + (scores["eyeLookDownRight"] || 0)) / 2;
+  
+  // Account for mirrored front camera stream
+  const lookLeft = ((scores["eyeLookOutLeft"] || 0) + (scores["eyeLookInRight"] || 0)) / 2;
+  const lookRight = ((scores["eyeLookInLeft"] || 0) + (scores["eyeLookOutRight"] || 0)) / 2;
+
+  // Sensitivity thresholds
+  if (lookUp > 0.22) return "UP";
+  if (lookDown > 0.22) return "DOWN";
+  if (lookLeft > 0.22) return "LEFT";
+  if (lookRight > 0.22) return "RIGHT";
+
+  return "CENTER";
 }
 
-// Main Frame Loop
+// Frame Loop
 async function predictWebcam() {
   if (!video.paused && !video.ended && video.readyState >= 2 && !document.hidden) {
     if (video.currentTime !== lastVideoTime) {
@@ -98,9 +125,9 @@ async function predictWebcam() {
       const results = faceLandmarker.detectForVideo(video, performance.now());
 
       if (results.faceLandmarks && results.faceLandmarks.length > 0) {
-        markPersonPresent();
-        const landmarks = results.faceLandmarks[0];
-        calculateEyeGazeAndMoveBall(landmarks);
+        const detectedDirection = detectGazeDirection(results.faceBlendshapes);
+        markPersonPresent(detectedDirection);
+        processExerciseProgress(detectedDirection);
       } else {
         markPersonAbsent();
       }
@@ -109,42 +136,36 @@ async function predictWebcam() {
     markPersonAbsent();
   }
 
-  // Smoothly update ball position towards target on every frame
-  currentX = lerp(currentX, targetX, 0.15);
-  currentY = lerp(currentY, targetY, 0.15);
-
-  target.style.left = `${currentX}%`;
-  target.style.top = `${currentY}%`;
-
   requestAnimationFrame(predictWebcam);
 }
 
-// Calculate Eye Gaze Ratios & Map to Ball Position
-function calculateEyeGazeAndMoveBall(landmarks) {
-  // Key Landmark Indices:
-  // Left Iris Center: 468 | Right Iris Center: 473
-  // Left Eye Outer/Inner: 33, 133 | Right Eye Inner/Outer: 362, 263
-  // Left Eye Top/Bottom: 159, 145 | Right Eye Top/Bottom: 386, 374
+// Step Validation Logic
+function processExerciseProgress(detectedDirection) {
+  if (currentStepIndex >= exerciseSteps.length) return;
 
-  const leftIris = landmarks[468];
-  const rightIris = landmarks[473];
+  const currentStep = exerciseSteps[currentStepIndex];
 
-  // 1. Horizontal Gaze Ratio (Left / Right)
-  const leftH = (leftIris.x - landmarks[33].x) / (landmarks[133].x - landmarks[33].x);
-  const rightH = (rightIris.x - landmarks[362].x) / (landmarks[263].x - landmarks[362].x);
-  const avgH = (leftH + rightH) / 2;
+  // Advance step when user holds their gaze in required direction
+  if (detectedDirection === currentStep.requiredDirection || currentStep.requiredDirection === "DONE") {
+    holdCounter++;
+    target.style.transform = `translate(-50%, -50%) scale(${1 + (holdCounter / HOLD_FRAMES_REQUIRED) * 0.4})`;
 
-  // 2. Vertical Gaze Ratio (Up / Down)
-  const leftV = (leftIris.y - landmarks[159].y) / (landmarks[145].y - landmarks[159].y);
-  const rightV = (rightIris.y - landmarks[386].y) / (landmarks[374].y - landmarks[386].y);
-  const avgV = (leftV + rightV) / 2;
+    if (holdCounter >= HOLD_FRAMES_REQUIRED) {
+      holdCounter = 0;
+      currentStepIndex++;
+      updateStepUI();
+    }
+  } else {
+    holdCounter = Math.max(0, holdCounter - 1); // Gradually decay progress if gaze drifts
+    target.style.transform = `translate(-50%, -50%) scale(1)`;
+  }
+}
 
-  // Normalize gaze around center point (0.5)
-  // Note: Video is mirrored by default, so left/right directions align naturally with screen
-  let normX = 50 + (avgH - 0.5) * 100 * SENSITIVITY_X;
-  let normY = 50 + (avgV - 0.5) * 100 * SENSITIVITY_Y;
+function updateStepUI() {
+  if (currentStepIndex >= exerciseSteps.length) return;
 
-  // Clamp values so the ball stays comfortably within screen edges (5% to 95%)
-  targetX = Math.min(Math.max(normX, 5), 95);
-  targetY = Math.min(Math.max(normY, 5), 95);
+  const step = exerciseSteps[currentStepIndex];
+  instructionText.innerText = step.label;
+  target.style.left = `${step.targetX}%`;
+  target.style.top = `${step.targetY}%`;
 }
