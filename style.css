@@ -1,0 +1,33 @@
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: sans-serif; }
+body { background: #0f172a; color: white; overflow: hidden; height: 100vh; width: 100vw; }
+
+.overlay {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; height: 100vh; text-align: center; gap: 20px;
+}
+
+button {
+  padding: 14px 28px; font-size: 1.2rem; border-radius: 8px; border: none;
+  background: #2563eb; color: white; cursor: pointer; transition: background 0.2s;
+}
+button:hover { background: #1d4ed8; }
+
+.hidden { display: none !important; }
+.hidden-video { position: absolute; opacity: 0; pointer-events: none; }
+
+/* Target Dot for Exercises */
+.target {
+  position: absolute; width: 40px; height: 40px; background: #10b981;
+  border-radius: 50%; transition: all 0.8s ease-in-out;
+  transform: translate(-50%, -50%); box-shadow: 0 0 20px #10b981;
+}
+
+#instruction-text {
+  position: absolute; bottom: 50px; width: 100%; text-align: center;
+  font-size: 1.5rem; color: #f8fafc;
+}
+
+#status-badge {
+  position: absolute; top: 20px; left: 20px; padding: 8px 16px;
+  background: rgba(255,255,255,0.1); backdrop-filter: blur(8px); border-radius: 20px;
+}
