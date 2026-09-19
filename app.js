@@ -1,5 +1,7 @@
-// Extract MediaPipe classes from global scope
-const { FaceLandmarker, FilesetResolver } = window.tasksVision || tasksVision;
+// Safely resolve MediaPipe classes from global scope without throwing ReferenceError
+const vision = window.tasksVision || window.vision || window;
+const FaceLandmarker = vision.FaceLandmarker || window.FaceLandmarker;
+const FilesetResolver = vision.FilesetResolver || window.FilesetResolver;
 
 const startBtn = document.getElementById("start-btn");
 const startScreen = document.getElementById("start-screen");
@@ -7,6 +9,7 @@ const appContainer = document.getElementById("app-container");
 const video = document.getElementById("webcam");
 const target = document.getElementById("exercise-target");
 const instructionText = document.getElementById("instruction-text");
+const loadingStatus = document.getElementById("loading-status");
 
 // Debug UI Elements
 const statusText = document.getElementById("status-text");
@@ -17,7 +20,7 @@ const holdProgress = document.getElementById("hold-progress");
 let faceLandmarker;
 let lastVideoTime = -1;
 let holdCounter = 0;
-const HOLD_FRAMES_REQUIRED = 30; // ~1 second of steady gaze hold to pass step
+const HOLD_FRAMES_REQUIRED = 30; // ~1 second of steady hold
 
 // Guided Exercise Sequence
 const exerciseSteps = [
@@ -33,13 +36,18 @@ const exerciseSteps = [
 
 let currentStepIndex = 0;
 
-// 1. Initialize FaceLandmarker
+// Initialize FaceLandmarker AI Model
 async function initializeFaceLandmarker() {
   try {
-    statusText.innerText = "Loading AI Model...";
+    if (!FilesetResolver || !FaceLandmarker) {
+      throw new Error("MediaPipe library failed to load from CDN.");
+    }
+
+    loadingStatus.innerText = "Downloading vision model assets...";
     const filesetResolver = await FilesetResolver.forVisionTasks(
       "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
     );
+
     faceLandmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
       baseOptions: {
         modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`,
@@ -49,31 +57,37 @@ async function initializeFaceLandmarker() {
       runningMode: "VIDEO",
       numFaces: 1
     });
-    statusText.innerText = "Ready to start";
+
+    loadingStatus.innerText = "Model Ready! Click 'Start Exercise' to begin.";
+    loadingStatus.style.color = "#10b981";
   } catch (err) {
-    statusText.innerText = "Model Load Failed ❌";
+    loadingStatus.innerText = "Error loading AI model. Please check console.";
+    loadingStatus.style.color = "#ef4444";
     console.error(err);
   }
 }
 
+// Start loading model immediately on page load
 initializeFaceLandmarker();
 
-// 2. Start Button Trigger
+// Start Button Click Event
 startBtn.addEventListener("click", async () => {
   if (!faceLandmarker) {
-    alert("Please wait for the AI model to finish loading.");
+    alert("The AI model is still loading or failed to load. Please refresh the page and try again.");
     return;
   }
 
   try {
-    if (document.documentElement.requestFullscreen) {
-      await document.documentElement.requestFullscreen();
-    }
-
+    // Request Camera Stream
     const stream = await navigator.mediaDevices.getUserMedia({ 
       video: { width: 1280, height: 720, facingMode: "user" } 
     });
     video.srcObject = stream;
+
+    // Request Fullscreen (optional / safe fallback if rejected)
+    if (document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
 
     startScreen.classList.add("hidden");
     appContainer.classList.remove("hidden");
@@ -81,12 +95,12 @@ startBtn.addEventListener("click", async () => {
     updateStepUI();
     video.addEventListener("loadeddata", predictWebcam);
   } catch (err) {
-    alert("Camera permission and fullscreen access are required.");
+    alert("Camera permission is required to run the application.");
     console.error(err);
   }
 });
 
-// 3. Detect Eye Movement using MediaPipe Blendshapes
+// Detect Gaze Direction using Blendshapes
 function detectGazeDirection(blendshapes) {
   if (!blendshapes || blendshapes.length === 0) return "CENTER";
 
@@ -98,11 +112,10 @@ function detectGazeDirection(blendshapes) {
   const lookUp = ((scores["eyeLookUpLeft"] || 0) + (scores["eyeLookUpRight"] || 0)) / 2;
   const lookDown = ((scores["eyeLookDownLeft"] || 0) + (scores["eyeLookDownRight"] || 0)) / 2;
   
-  // Front camera stream is mirrored
+  // Account for mirrored video
   const lookLeft = ((scores["eyeLookOutLeft"] || 0) + (scores["eyeLookInRight"] || 0)) / 2;
   const lookRight = ((scores["eyeLookInLeft"] || 0) + (scores["eyeLookOutRight"] || 0)) / 2;
 
-  // Thresholds for triggering directions
   if (lookUp > 0.18) return "UP";
   if (lookDown > 0.18) return "DOWN";
   if (lookLeft > 0.18) return "LEFT";
@@ -111,7 +124,7 @@ function detectGazeDirection(blendshapes) {
   return "CENTER";
 }
 
-// 4. Main Real-time Frame Loop
+// Frame Detection Loop
 async function predictWebcam() {
   if (!video.paused && !video.ended && video.readyState >= 2 && !document.hidden) {
     if (video.currentTime !== lastVideoTime) {
@@ -145,7 +158,7 @@ function markPersonAbsent() {
   holdProgress.value = 0;
 }
 
-// 5. Verify Gaze & Advance Ball Position
+// Step Progress Logic
 function processExerciseProgress(detectedDirection) {
   if (currentStepIndex >= exerciseSteps.length) return;
 
@@ -153,8 +166,7 @@ function processExerciseProgress(detectedDirection) {
 
   if (detectedDirection === currentStep.requiredDirection || currentStep.requiredDirection === "DONE") {
     holdCounter++;
-    const progressPercent = Math.min(100, (holdCounter / HOLD_FRAMES_REQUIRED) * 100);
-    holdProgress.value = progressPercent;
+    holdProgress.value = Math.min(100, (holdCounter / HOLD_FRAMES_REQUIRED) * 100);
 
     if (holdCounter >= HOLD_FRAMES_REQUIRED) {
       holdCounter = 0;
