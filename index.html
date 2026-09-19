@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Eye Exercise App</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Import MediaPipe Vision Library -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm/vision_bundle.js" crossorigin="anonymous"></script>
+</head>
+<body>
+  <!-- Overlay / Welcome Screen -->
+  <div id="start-screen" class="overlay">
+    <h1>Eye Exercise Assistant</h1>
+    <p>Improve eye mobility and reduce strain with guided exercises.</p>
+    <button id="start-btn">Start Exercise</button>
+  </div>
+
+  <!-- Main Fullscreen Canvas & UI -->
+  <div id="app-container" class="hidden">
+    <!-- Hidden video element for camera feed -->
+    <video id="webcam" autoplay playsinline muted class="hidden-video"></video>
+    
+    <!-- Exercise UI -->
+    <div id="exercise-target" class="target"></div>
+    <div id="instruction-text">Look directly at the green target</div>
+    <div id="status-badge">Detecting face...</div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
