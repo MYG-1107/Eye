@@ -14,21 +14,20 @@ const statusBadge = document.getElementById("status-badge");
 let faceLandmarker;
 let lastVideoTime = -1;
 let isPersonPresent = false;
+let holdTimer = 0;
+let stepIndex = 0;
 
 // Exercise Target Positions
 const exerciseSequence = [
-  { label: "Look UP as far as you can", x: 50, y: 10, requiredGaze: "UP" },
-  { label: "Return to CENTER", x: 50, y: 50, requiredGaze: "CENTER" },
-  { label: "Look DOWN as far as you can", x: 50, y: 90, requiredGaze: "DOWN" },
-  { label: "Return to CENTER", x: 50, y: 50, requiredGaze: "CENTER" },
-  { label: "Look LEFT as far as you can", x: 10, y: 50, requiredGaze: "LEFT" },
-  { label: "Return to CENTER", x: 50, y: 50, requiredGaze: "CENTER" },
-  { label: "Look RIGHT as far as you can", x: 90, y: 50, requiredGaze: "RIGHT" },
-  { label: "Exercise Complete! Well done.", x: 50, y: 50, requiredGaze: "DONE" }
+  { label: "Look UP as far as you can", x: 50, y: 10 },
+  { label: "Return to CENTER", x: 50, y: 50 },
+  { label: "Look DOWN as far as you can", x: 50, y: 90 },
+  { label: "Return to CENTER", x: 50, y: 50 },
+  { label: "Look LEFT as far as you can", x: 10, y: 50 },
+  { label: "Return to CENTER", x: 50, y: 50 },
+  { label: "Look RIGHT as far as you can", x: 90, y: 50 },
+  { label: "Exercise Complete! Well done.", x: 50, y: 50 }
 ];
-
-let stepIndex = 0;
-let holdTimer = 0;
 
 // Initialize MediaPipe FaceLandmarker
 async function initializeFaceLandmarker() {
@@ -48,6 +47,26 @@ async function initializeFaceLandmarker() {
 }
 
 initializeFaceLandmarker();
+
+// Fix 1: Handle tab switching / application losing focus
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    markPersonAbsent();
+  }
+});
+
+function markPersonAbsent() {
+  isPersonPresent = false;
+  holdTimer = 0; // Reset timer when no face is detected
+  statusBadge.innerText = "No Person Detected ❌";
+  statusBadge.style.background = "rgba(239, 68, 68, 0.2)";
+}
+
+function markPersonPresent() {
+  isPersonPresent = true;
+  statusBadge.innerText = "Person Detected ✅";
+  statusBadge.style.background = "rgba(16, 185, 129, 0.2)";
+}
 
 startBtn.addEventListener("click", async () => {
   if (!faceLandmarker) {
@@ -76,46 +95,34 @@ startBtn.addEventListener("click", async () => {
 
 // Main Real-Time Frame Detection Loop
 async function predictWebcam() {
-  if (video.currentTime !== lastVideoTime) {
-    lastVideoTime = video.currentTime;
-    const results = faceLandmarker.detectForVideo(video, performance.now());
+  // Fix 2: Ensure video stream is active and tab is visible
+  if (!video.paused && !video.ended && video.readyState >= 2 && !document.hidden) {
+    if (video.currentTime !== lastVideoTime) {
+      lastVideoTime = video.currentTime;
+      const results = faceLandmarker.detectForVideo(video, performance.now());
 
-    // Fix 1: Check if a person is actually detected
-    if (results.faceLandmarks && results.faceLandmarks.length > 0) {
-      isPersonPresent = true;
-      statusBadge.innerText = "Person Detected ✅";
-      statusBadge.style.background = "rgba(16, 185, 129, 0.2)";
-
-      // Fix 2: Track eye landmarks and evaluate gaze movement
-      const landmarks = results.faceLandmarks[0];
-      processEyeMovement(landmarks);
-    } else {
-      isPersonPresent = false;
-      statusBadge.innerText = "No Person Detected ❌";
-      statusBadge.style.background = "rgba(239, 68, 68, 0.2)";
+      if (results.faceLandmarks && results.faceLandmarks.length > 0) {
+        markPersonPresent();
+        const landmarks = results.faceLandmarks[0];
+        processEyeMovement(landmarks);
+      } else {
+        markPersonAbsent();
+      }
     }
+  } else {
+    markPersonAbsent();
   }
 
   requestAnimationFrame(predictWebcam);
 }
 
-// Process eye landmarks to verify user is looking toward target
+// Process eye landmarks to verify user presence & movement
 function processEyeMovement(landmarks) {
   if (stepIndex >= exerciseSequence.length) return;
 
-  // Iris Landmark Indices: Left Iris Center = 468, Right Iris Center = 473
-  // Eye Corner Landmarks: Left Eye Outer = 33, Right Eye Outer = 263
-  const leftIris = landmarks[468];
-  const rightIris = landmarks[473];
-  const topEyelid = landmarks[159];
-  const bottomEyelid = landmarks[145];
-
-  // Calculate relative vertical gaze position
-  const verticalDiff = ((leftIris.y + rightIris.y) / 2) - ((topEyelid.y + bottomEyelid.y) / 2);
-
-  // Advance sequence when user maintains eye gaze direction
+  // Track timer only when person is active in front of screen
   holdTimer++;
-  if (holdTimer > 120) { // ~2 seconds of detected presence/gaze
+  if (holdTimer > 100) { // ~2 seconds of continuous detection
     holdTimer = 0;
     stepIndex++;
     updateExerciseTarget();
