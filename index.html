@@ -5,25 +5,35 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Eye Exercise App</title>
   <link rel="stylesheet" href="style.css" />
+  <!-- Load MediaPipe Tasks Vision Global Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm/vision_bundle.js" crossorigin="anonymous"></script>
 </head>
 <body>
-  <!-- Overlay / Welcome Screen -->
+  <!-- Overlay / Start Screen -->
   <div id="start-screen" class="overlay">
     <h1>Eye Exercise Assistant</h1>
-    <p>Improve eye mobility and reduce strain with guided exercises.</p>
+    <p>Follow the green target with your eyes to complete the exercises.</p>
     <button id="start-btn">Start Exercise</button>
   </div>
 
-  <!-- Main Fullscreen Canvas & UI -->
+  <!-- Main Exercise View -->
   <div id="app-container" class="hidden">
+    <!-- Camera Feed (hidden for privacy / UI cleanliness) -->
     <video id="webcam" autoplay playsinline muted class="hidden-video"></video>
     
-    <!-- Exercise UI -->
+    <!-- Target Dot & Instructions -->
     <div id="exercise-target" class="target"></div>
-    <div id="instruction-text">Position your face in front of the camera</div>
-    <div id="status-badge">Initializing Face Detector...</div>
+    <div id="instruction-text">Loading model...</div>
+
+    <!-- Live Tester Debug Panel -->
+    <div id="debug-panel">
+      <div><strong>Status:</strong> <span id="status-text">Initializing...</span></div>
+      <div><strong>Current Gaze:</strong> <span id="gaze-text">NONE</span></div>
+      <div><strong>Required Gaze:</strong> <span id="required-text">UP</span></div>
+      <div><strong>Hold Progress:</strong> <progress id="hold-progress" value="0" max="100"></progress></div>
+    </div>
   </div>
 
-  <script type="module" src="app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
