@@ -31,3 +31,41 @@ button:hover { background: #1d4ed8; }
   position: absolute; top: 20px; left: 20px; padding: 8px 16px;
   background: rgba(255,255,255,0.1); backdrop-filter: blur(8px); border-radius: 20px;
 }
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: sans-serif; }
+body { background: #0f172a; color: white; overflow: hidden; height: 100vh; width: 100vw; }
+
+.overlay {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; height: 100vh; text-align: center; gap: 20px;
+}
+
+button {
+  padding: 14px 28px; font-size: 1.2rem; border-radius: 8px; border: none;
+  background: #2563eb; color: white; cursor: pointer; transition: background 0.2s;
+}
+button:hover { background: #1d4ed8; }
+
+.hidden { display: none !important; }
+.hidden-video { position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; }
+
+/* Exercise Target Dot */
+.target {
+  position: absolute; width: 50px; height: 50px; background: #10b981;
+  border-radius: 50%; transition: left 0.5s ease-in-out, top 0.5s ease-in-out, transform 0.1s ease;
+  transform: translate(-50%, -50%); box-shadow: 0 0 25px #10b981; z-index: 10;
+}
+
+#instruction-text {
+  position: absolute; bottom: 60px; width: 100%; text-align: center;
+  font-size: 1.8rem; font-weight: bold; color: #f8fafc; z-index: 10;
+}
+
+/* Debug Panel for Tester Verification */
+#debug-panel {
+  position: absolute; top: 20px; left: 20px; padding: 14px 18px;
+  background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px); border-radius: 12px; font-size: 0.95rem;
+  display: flex; flex-direction: column; gap: 8px; z-index: 20; min-width: 240px;
+}
+
+progress { width: 100px; height: 12px; vertical-align: middle; }
